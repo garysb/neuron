@@ -1,0 +1,36 @@
+<!-- hide button -->
+<div fxLayout="row" fxLayoutAlign="end start">
+  <button mat-icon-button (click)="onClose()"><mat-icon>keyboard_hide</mat-icon></button>
+</div>
+
+<!-- incomming data section -->
+<div class="incoming">
+  <mat-list dense>
+    <mat-list-item *ngFor="let value of incoming">{{ value }}</mat-list-item>
+  </mat-list>
+</div>
+
+<form #sendForm="ngForm">
+  <div fxLayout="row" fxLayoutAlign="center center">
+    <!-- thread selection -->
+    <mat-form-field fxFlex>
+      <mat-select placeholder="Select a thread" [(ngModel)]="model.thread" name="thread">
+        <mat-option *ngFor="let thread of threads" [value]="thread">
+          {{ thread }}
+        </mat-option>
+      </mat-select>
+      <mat-hint align="end">Here's the dropdown arrow ^</mat-hint>
+    </mat-form-field>
+
+    <!-- action selection -->
+    <mat-form-field hintLabel="Max 32 characters" fxFlex>
+      <input matInput #action maxlength="32" placeholder="Enter some input" [(ngModel)]="model.action" name="action">
+      <mat-hint align="end">{{action.value?.length || 0}}/32</mat-hint>
+    </mat-form-field>
+  </div>
+
+  <div fxLayout="row" fxLayoutAlign="end end">
+    <button type="submit" mat-raised-button color="primary" (click)="onSubmit()">Send</button>
+  </div>
+</form>
+<mat-checkbox [(ngModel)]="poll">Poll Server</mat-checkbox>

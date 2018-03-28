@@ -1,0 +1,13 @@
+<footer>
+  <mat-toolbar fxLayout="row" fxLayoutAlign="space-between center">
+    <div fxFlex>
+      <button mat-mini-fab color="disabled" (click)="openTerminal()"><mat-icon>keyboard</mat-icon></button>
+    </div>
+    <div>
+      <mat-divider [vertical]="true"></mat-divider>
+        <mat-icon [style.color]="downloadColor">file_download</mat-icon>
+        <mat-icon [style.color]="uploadColor">file_upload</mat-icon>
+        <mat-icon [style.color]="connectionColor">router</mat-icon>
+    </div>
+  </mat-toolbar>
+</footer>
