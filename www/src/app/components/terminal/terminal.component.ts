@@ -13,7 +13,7 @@ export class TerminalComponent extends SocketComponent implements OnInit {
   private model: Payload = new Payload('thread', 'action', 100, 0);
   public submitted: Boolean = false;
   public poll: Boolean = true;
-  public threads: Array<String> = ['server', 'system.interface', 'system.threader', 'system.queue'];
+  public threads: Array<String> = ['server', 'system.interface', 'system.threadmanager', 'system.queuemanager'];
   public incoming: Array<String> = new Array('Listening for messages');
 
   constructor(protected socket: SocketService) {
@@ -26,6 +26,12 @@ export class TerminalComponent extends SocketComponent implements OnInit {
 
   public onSubmit() {
     this.submitted = true;
+    if (this.model.action.split(' ').length >= 1) {
+      const action = this.model.action;
+      this.model.action = action.substr(0, action.indexOf(' '));
+      this.model.data = action.substr(action.indexOf(' ') + 1);
+    }
+
     this.socket.send(JSON.stringify(this.model));
   }
 

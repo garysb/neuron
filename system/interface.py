@@ -1,69 +1,80 @@
+#!/usr/bin/env python3
 # vim: set ts=4 sw=4 sts=4 list nu:
-# import sys
-# import time
+
 import asyncio
 import queue
-# import datetime
+import json
 import websockets
 from system import Payload
 from system import Thread
 
 class Interface(Thread):
+
     def __init__(self, queues):
         Thread.__init__(self, queues)
         print('Websocket version: ', websockets.version.version)
 
-    # Default instant
-    def run (self):
+    def run(self):
         self.setName('system.interface')
         self.queues.create(self.getName())
-
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
+        self.incoming = asyncio.Queue()
+        self.outgoing = asyncio.Queue()
 
+        asyncio.set_event_loop(self.loop)
         start_server = websockets.serve(self.handler, '127.0.0.1', 1234)
-        self.loop.run_until_complete(start_server)
-        self.loop.run_forever()
+        asyncio.get_event_loop().run_until_complete(start_server)
+        asyncio.get_event_loop().run_forever()
 
-    async def consumer(self, message):
+    async def handler(self, websocket, path):
+        self.ws = websocket
+
+        while True:
+            listener_task = asyncio.ensure_future(self.get_message())
+            producer_task = asyncio.ensure_future(self.produce())
+            done, pending = await asyncio.wait(
+                [listener_task, producer_task],
+                return_when=asyncio.FIRST_COMPLETED)
+
+            if listener_task in done:
+                await self.consume()
+            else:
+                listener_task.cancel()
+
+            if producer_task in done:
+                msg_to_send = producer_task.result()
+                await self.send_message(msg_to_send)
+            else:
+                producer_task.cancel()
+
+    async def get_message(self):
+        msg_in = await self.ws.recv()
+        await self.incoming.put(msg_in)
         payload = Payload()
-        payload.load(message)
-        print('Neuron: consumer - {0}'.format(payload.generate()))
+        payload.load(msg_in)
 
         # add the payload to the queue stack
         self.queues.put(payload.thread, payload.action, payload, payload.priority)
-        return
 
-    async def producer(self):
-        payload = Payload()
-        payload.thread = 'system.interface'
-        payload.action = 'reset'
-        payload.status = '0'
-        payload.data = 'Successfully Reset'
+    async def send_message(self, message):
+        if message is not None:
+            await self.ws.send(message)
 
-        print('Neuron: producer - {0}'.format(payload.generate()))
-        return payload.generate()
+    async def consume(self):
+        msg_to_consume = await self.incoming.get()
+        await self.outgoing.put(msg_to_consume)
 
-    async def consumer_handler(self, websocket, path):
-        async for message in websocket:
-            await self.consumer(message)
-
-    async def producer_handler(self, websocket, path):
-        while True:
-            try:
-                action = self.queues.get(self.getName(), True, timeout=0.25)
-                print('Action: {0}'.format(action))
-                message = await self.producer()
-                await websocket.send(message)
-            except queue.Empty:
-                print('system.interface queue empty')
-                pass
-
-    async def handler(self, websocket, path):
-        print('Neuron: handler')
-        consumer_task = asyncio.ensure_future(self.consumer_handler(websocket, path))
-        producer_task = asyncio.ensure_future(self.producer_handler(websocket, path))
-        done, pending = await asyncio.wait([consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED,)
-
-        for task in pending:
-            task.cancel()
+    async def produce(self):
+        try:
+            action = self.queues.get('system.interface', timeout=0.1)
+            function = 'on' + action['action'].lower().capitalize()
+            getattr(self, function)(*action['action'])
+        except (KeyError, AttributeError):
+            print('Generate: {0}'.format(action['arguments'].generate()))
+            return action['arguments'].generate()
+        except queue.Empty:
+            pass
+        except KeyError:
+            payload = Payload(self.name, action['action'], 1, 'Unknown action')
+            self.queues.put(self.name, action['action'], payload)

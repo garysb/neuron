@@ -5,5 +5,5 @@
 from .payload import Payload
 from .thread import Thread
 from .interface import Interface
-from .queues import Queues
-from .threader import Threader
+from .queuemanager import QueueManager
+from .threadmanager import ThreadManager

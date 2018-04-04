@@ -2,10 +2,12 @@
 
 import string
 import queue
+import time
 import threading
+from system import Payload
 from importlib import reload, import_module
 
-class Threader:
+class ThreadManager:
     """ This object manages our threads. The system works by holding a local
         dictionary called self.threads. When we want to create a new thread, we
         start by finding the module containing the thread data. Once we find it
@@ -20,14 +22,10 @@ class Threader:
             We also create a threads queue to handle communication with the
             outside world and our dictionary to hold the modules and threads.
         """
-        self.name = 'system.threader'
-        self.threads = {}
-        self.queues = queues
-        self.queues.create('system.threader')
-
-    # Fetch a list of all our queues
-    def list(self):
-        return self.threads.keys()
+        self.name = 'system.threadmanager'
+        self.__threads = {}
+        self.__queues = queues
+        self.__queues.create('system.threadmanager')
 
     def parse_queue(self, block=False, timeout=1):
         """ We run parse_queue in a loop to check if we have any commands to
@@ -37,36 +35,28 @@ class Threader:
             in the getattr function by using variadic function initiators by
             placing the '**' before the option list.
         """
-        while True:
-            try:
-                runner = self.queues.get('system.threader', block=block, timeout=timeout)
-                getattr(self, runner[1])(**runner[2])
-            except queue.Empty:
-                print('system.threader queue empty')
-                return
-
-    def parse_action(self, action):
-        """ When we are running the system, we dont want to be stuck into using
-            one interface type. By executing the commands locally and returning
-            the result to the calling party, we can get around this. Just note
-            that we get the whole command here, so we need to first strip off
-            the 'threads' part. Also, all commands should be placed into the
-            queue and not run dirrectly. This is so that our prioritising works
-            properly.
-        """
         try:
-            if len(action) == 1:
-                action.append('read')
+            action = self.__queues.get('system.threadmanager', timeout=0.1)
+            function = 'on' + action['action'].lower().capitalize()
+            getattr(self, function)(**action)
+        except queue.Empty:
+            return
+        except (KeyError, AttributeError):
+            payload = Payload(self.name, action['action'], 1, 'Unknown action')
+            self.__queues.put('system.interface', action['action'], payload)
 
-            call = getattr(self, action[1], None)
+    def onList(self, **kwargs):
+        results = list(self.list())
+        payload = Payload(self.name, 'list', 0, results)
+        self.__queues.put('system.interface', 'list', payload)
 
-            if callable(call):
-                values = dict([v.split(':') for v in action[2:]])
-                self.queues.put(action[0], action[1], values)
-            else:
-                print("%s action not found in %s" % {action[1], action[0]})
-        except:
-            print("error calling %s in %s" % {action[0], action[1]})
+    def onRead(self, **kwargs):
+        for name, value in kwargs.items():
+            print( '{0} = {1}'.format(name, value))
+
+    # Fetch a list of all our threads
+    def list(self):
+        return self.__threads.keys()
 
     def create(self, module='system.interface'):
         """ due to the nature of our file system layout, we need to be able to
@@ -83,12 +73,12 @@ class Threader:
             # if it isnt, copy the module name and leave the fromlist empty
             package_name, module_name = module.rsplit(".", 1)
             object_name = module_name.capitalize()
-            self.threads[module] = {}
-            self.threads[module]['module'] = import_module(module)
+            self.__threads[module] = {}
+            self.__threads[module]['module'] = import_module(module)
 
             # Create the thread and start it
-            self.threads[module]['thread'] = getattr(self.threads[module]['module'], object_name) (self.queues)
-            self.threads[module]['thread'].start()
+            self.__threads[module]['thread'] = getattr(self.__threads[module]['module'], object_name) (self.__queues)
+            self.__threads[module]['thread'].start()
         except KeyError:
             print('KeyError {0}: {1}'.format(id, id))
 
@@ -101,7 +91,7 @@ class Threader:
             reload the module, then start the new instantiation.
         """
         if id:
-            print(self.threads[id])
+            print(self.__threads[id])
         else:
             for t in threading.enumerate():
                 print(t.name)
@@ -115,8 +105,7 @@ class Threader:
             reload the module, then start the new instantiation.
         """
         try:
-            module = self.threads[id]['module'].__name__
-            reload(self.threads[id]['module'])
+            reload(self.__threads[id]['module'])
         except Exception as error:
             print('Error reloading: {0}'.format(error))
 
@@ -125,11 +114,12 @@ class Threader:
             then we wait for a while and remove the reference in the threads
             dictionary. Once we are sure its gone, we remove the module also.
         """
-        self.queues.put(id,'close',{})
+        self.__queues.put(id,'delete',{})
         try:
-            while self.threads[id]['thread'].isAlive():
-                time.sleep(1)
+             while self.__threads[id]['thread'].isAlive():
+                time.sleep(0.1)
         except:
             pass
-        if self.threads.has_key(id):
-            del self.threads[id]
+
+        if id in self.__threads:
+            del self.__threads[id]

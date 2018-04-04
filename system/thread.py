@@ -1,7 +1,7 @@
 # vim: set ts=4 sw=4 sts=4 list nu:
 
-import threading
 import queue
+import threading
 from system import Payload
 
 class Thread(threading.Thread):
@@ -13,7 +13,7 @@ class Thread(threading.Thread):
             threading object.
         """
         threading.Thread.__init__(self)
-        self.queues = queues
+        self.__queues = queues
 
     def send(self, data, priority=100, action='', status=0):
         """ Send a message to the Websocket Interface """
@@ -25,7 +25,7 @@ class Thread(threading.Thread):
         payload.status = status
         payload.data = data
 
-        self.queues.put('system.interface', 'send', payload, priority=priority, block=True, timeout=None)
+        self.__queues.put('system.interface', 'send', payload, priority=priority, block=True, timeout=None)
 
     def parse_queue(self, block=True, timeout=0.25):
         """ We "pop" an item off the start of the queue by calling get method.
@@ -34,8 +34,9 @@ class Thread(threading.Thread):
             variadic call by prepending the ** to the beginning of the argument.
         """
         try:
-            action = self.queues.get(self.getName(), block=block, timeout=timeout)
+            action = self.__queues.get(self.getName(), block=block, timeout=timeout)
             function = 'on' + action['action'].lower().capitalize()
+            print('calling: {0}'.format(function))
             getattr(self, function)(*action['action'])
         except (KeyError, AttributeError):
             print('Unknown action "{0}" in "{1}"'.format(function, self.getName()))
@@ -82,11 +83,11 @@ class Thread(threading.Thread):
     # 	"""
     # 	self.queues.write(self.name, message)
 
-    def onClose(self):
+    def onDelete(self, *arg):
     	""" Close the thread
     	"""
     	# Remove our queue
-    	self.queues.remove(self.getName())
+    	self.__queues.remove(self.getName())
 
     	# Cant use the exit() call as this invokes string __exit__
     	raise SystemExit
