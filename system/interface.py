@@ -12,17 +12,18 @@ class Interface(Thread):
 
     def __init__(self, queues):
         Thread.__init__(self, queues)
+        self.__queues = queues
+        self.setName('system.interface')
         print('Websocket version: ', websockets.version.version)
 
     def run(self):
-        self.setName('system.interface')
-        self.queues.create(self.getName())
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-        self.incoming = asyncio.Queue()
-        self.outgoing = asyncio.Queue()
+        self.__queues.create(self.getName())
+        self.__loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.__loop)
+        self.__incoming = asyncio.Queue()
+        self.__outgoing = asyncio.Queue()
 
-        asyncio.set_event_loop(self.loop)
+        asyncio.set_event_loop(self.__loop)
         start_server = websockets.serve(self.handler, '127.0.0.1', 1234)
         asyncio.get_event_loop().run_until_complete(start_server)
         asyncio.get_event_loop().run_forever()
@@ -50,24 +51,24 @@ class Interface(Thread):
 
     async def get_message(self):
         msg_in = await self.ws.recv()
-        await self.incoming.put(msg_in)
+        await self.__incoming.put(msg_in)
         payload = Payload()
         payload.load(msg_in)
 
         # add the payload to the queue stack
-        self.queues.put(payload.thread, payload.action, payload, payload.priority)
+        self.__queues.put(payload.thread, payload.action, payload, payload.priority)
 
     async def send_message(self, message):
         if message is not None:
             await self.ws.send(message)
 
     async def consume(self):
-        msg_to_consume = await self.incoming.get()
-        await self.outgoing.put(msg_to_consume)
+        msg_to_consume = await self.__incoming.get()
+        await self.__outgoing.put(msg_to_consume)
 
     async def produce(self):
         try:
-            action = self.queues.get('system.interface', timeout=0.1)
+            action = self.__queues.get('system.interface', timeout=0.1)
             function = 'on' + action['action'].lower().capitalize()
             getattr(self, function)(*action['action'])
         except (KeyError, AttributeError):
@@ -77,4 +78,4 @@ class Interface(Thread):
             pass
         except KeyError:
             payload = Payload(self.name, action['action'], 1, 'Unknown action')
-            self.queues.put(self.name, action['action'], payload)
+            self.__queues.put(self.name, action['action'], payload)

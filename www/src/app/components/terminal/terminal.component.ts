@@ -26,7 +26,8 @@ export class TerminalComponent extends SocketComponent implements OnInit {
 
   public onSubmit() {
     this.submitted = true;
-    if (this.model.action.split(' ').length >= 1) {
+    console.log('length: ', this.model.action.split(' ').length);
+    if (this.model.action.split(' ').length > 1) {
       const action = this.model.action;
       this.model.action = action.substr(0, action.indexOf(' '));
       this.model.data = action.substr(action.indexOf(' ') + 1);

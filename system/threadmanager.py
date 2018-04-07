@@ -7,7 +7,7 @@ import threading
 from system import Payload
 from importlib import reload, import_module
 
-class ThreadManager:
+class ThreadManager(threading.Thread):
     """ This object manages our threads. The system works by holding a local
         dictionary called self.threads. When we want to create a new thread, we
         start by finding the module containing the thread data. Once we find it
@@ -22,10 +22,16 @@ class ThreadManager:
             We also create a threads queue to handle communication with the
             outside world and our dictionary to hold the modules and threads.
         """
-        self.name = 'system.threadmanager'
+        threading.Thread.__init__(self)
+        self.setName('system.threadmanager')
+
         self.__threads = {}
         self.__queues = queues
         self.__queues.create('system.threadmanager')
+
+    def run(self):
+        while True:
+            self.parse_queue()
 
     def parse_queue(self, block=False, timeout=1):
         """ We run parse_queue in a loop to check if we have any commands to
@@ -36,18 +42,18 @@ class ThreadManager:
             placing the '**' before the option list.
         """
         try:
-            action = self.__queues.get('system.threadmanager', timeout=0.1)
+            action = self.__queues.get(self.getName(), timeout=0.1)
             function = 'on' + action['action'].lower().capitalize()
             getattr(self, function)(**action)
         except queue.Empty:
             return
         except (KeyError, AttributeError):
-            payload = Payload(self.name, action['action'], 1, 'Unknown action')
+            payload = Payload(self.getName(), action['action'], 1, 'Unknown action')
             self.__queues.put('system.interface', action['action'], payload)
 
     def onList(self, **kwargs):
         results = list(self.list())
-        payload = Payload(self.name, 'list', 0, results)
+        payload = Payload(self.getName(), 'list', 0, results)
         self.__queues.put('system.interface', 'list', payload)
 
     def onRead(self, **kwargs):

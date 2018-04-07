@@ -18,10 +18,16 @@ print('Neuron: version {0} (Python {1}.{2})'.format(
     sys.version_info[1])
 )
 
-# define our global variables
+# start our queue manager
 qm = QueueManager()
-qm.create('server')
+qm.start()
+
+# start our thread manager
 tm = ThreadManager(qm)
+tm.start()
+
+# create our main server queue and create the socket interface thread
+qm.create('server')
 tm.create('system.interface')
 
 # close all threads and exit
@@ -37,17 +43,17 @@ def onExit():
         # we have closed all the threads, exit the system
         raise SystemExit
 
-while True:
-    try:
-        tm.parse_queue()
-        action = qm.get('server', timeout=0.1)
-        function = 'on' + action['action'].lower().capitalize()
-        globals()[function]()
-    except queue.Empty:
-        pass
-    except KeyError:
-        payload = Payload('server', action['action'], 1, 'Unknown action')
-        qm.put('system.interface', action['action'], payload)
-    except KeyboardInterrupt:
-        print('Shutting down server')
-        onExit()
+if __name__ == "__main__":
+    while True:
+        try:
+            action = qm.get('server', timeout=0.1)
+            function = 'on' + action['action'].lower().capitalize()
+            globals()[function]()
+        except queue.Empty:
+            pass
+        except KeyError:
+            payload = Payload('server', action['action'], 1, 'Unknown action')
+            qm.put('system.interface', action['action'], payload)
+        except KeyboardInterrupt:
+            print('Shutting down server')
+            onExit()
